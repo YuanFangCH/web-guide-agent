@@ -1,0 +1,77 @@
+name: guide-agent
+
+services:
+  postgres:
+    image: docker.m.daocloud.io/pgvector/pgvector:pg16
+    container_name: guide-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${GUIDE_AGENT_POSTGRES_USER:?GUIDE_AGENT_POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${GUIDE_AGENT_POSTGRES_PASSWORD:?GUIDE_AGENT_POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${GUIDE_AGENT_POSTGRES_DB:?GUIDE_AGENT_POSTGRES_DB is required}
+    volumes:
+      - guide_agent_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${GUIDE_AGENT_POSTGRES_USER:?GUIDE_AGENT_POSTGRES_USER is required} -d ${GUIDE_AGENT_POSTGRES_DB:?GUIDE_AGENT_POSTGRES_DB is required}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - guide_agent_internal
+
+  rag:
+    build:
+      context: ./rag
+    container_name: guide-agent-rag
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgresql://${GUIDE_AGENT_POSTGRES_USER:?GUIDE_AGENT_POSTGRES_USER is required}:${GUIDE_AGENT_POSTGRES_PASSWORD:?GUIDE_AGENT_POSTGRES_PASSWORD is required}@postgres:5432/${GUIDE_AGENT_POSTGRES_DB:?GUIDE_AGENT_POSTGRES_DB is required}
+      UPLOAD_DIR: /data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - guide_agent_uploads:/data/uploads
+    networks:
+      - guide_agent_internal
+      - guide_agent_edge
+
+  core:
+    build:
+      context: ./core
+    container_name: guide-agent-core
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      GUIDE_AGENT_DB_PATH: /data/guide-agent.db
+      RAG_BASE_URL: http://rag:8000
+    depends_on:
+      - rag
+    volumes:
+      - guide_agent_core_data:/data
+    networks:
+      - guide_agent_internal
+      - guide_agent_edge
+      - web_default
+
+volumes:
+  guide_agent_postgres_data:
+  guide_agent_core_data:
+  guide_agent_uploads:
+
+networks:
+  guide_agent_internal:
+    name: guide_agent_internal
+  guide_agent_edge:
+    external: true
+    name: guide_agent_edge
+  web_default:
+    external: true
+    name: web_default
