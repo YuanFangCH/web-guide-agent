@@ -1,70 +1,55 @@
-# Web Guide Agent
+# 网页讲解助手
 
-Web Guide Agent is an independent page-guidance and retrieval-augmented chat
-service. It can run on its own with an empty knowledge base or connect to a
-compatible Railway Memory Site deployment.
+网页讲解助手是一个可独立部署的页面讲解与 RAG 问答服务，可在空知识库下运行，也可连接兼容的铁路记忆馆部署。
 
-The repository does not include production knowledge documents, book imports,
-vector data, conversations, caches, API keys, virtual-character assets, or
-database volumes.
+仓库不包含生产知识文档、图书导入数据、向量数据、会话、缓存、API 密钥、虚拟形象素材或数据库卷。
 
-## Components
+## 组件
 
-- `core`: FastAPI service for accounts, sessions, SSE chat, the web widget,
-  page context, research notes, optional website synchronization, and guarded
-  website write sessions.
-- `rag`: FastAPI and Haystack service backed by PostgreSQL/pgvector for document
-  ingestion, chunking, retrieval, API keys, and priority-aware ranking.
-- `postgres`: a private pgvector database owned only by the agent.
-- Website integration: optional read-only PostgreSQL access and optional
-  short-lived website write APIs.
+- `core`：FastAPI 服务，负责账号、会话、SSE 对话、网页组件、页面上下文、研究笔记、可选网站同步和受控网站写入会话。
+- `rag`：基于 FastAPI、Haystack 和 PostgreSQL/pgvector 的服务，负责文档入库、切片、检索、API 密钥和优先级排序。
+- `postgres`：仅供本服务使用的私有 pgvector 数据库。
+- 网站集成：可选的只读 PostgreSQL 访问和限时网站写入 API。
 
-## Quick Start
+## 快速开始
 
-1. Create the shared external networks, or start the website Compose stack that
-   creates `guide_agent_edge`.
+1. 创建共享外部网络，或启动能够创建 `guide_agent_edge` 的网站 Compose 服务栈。
 
 ```bash
 docker network create guide_agent_edge
 docker network create web_default
 ```
 
-2. Copy `.env.example` to `.env` and replace every password, token, and model
-   setting.
-3. Start the agent.
+2. 将 `.env.example` 复制为 `.env`，替换全部密码、令牌和模型配置。
+3. 启动讲解助手。
 
 ```bash
 docker compose up -d --build
 ```
 
-4. Open `http://localhost:8080/guide-agent/admin`.
+4. 打开 `http://localhost:8080/guide-agent/admin`。
 
-The PostgreSQL, SQLite, upload, cache, and vector tables are created without
-sample documents. Health information is available at `/health`.
+PostgreSQL、SQLite、上传文件、缓存和向量表均以空数据初始化。健康检查位于 `/health`。
 
-## Public Endpoints
+## 公开入口
 
-- Widget script: `/guide-agent/widget.js`
-- Team workspace: `/guide-agent/admin`
-- Core API: `/api/guide-agent/`
-- External ingestion API: `/api/guide-agent/v1/`
+- 网页组件脚本：`/guide-agent/widget.js`
+- 团队工作区：`/guide-agent/admin`
+- Core API：`/api/guide-agent/`
+- 外部入库 API：`/api/guide-agent/v1/`
 
-## Agent Kernel
+## Agent 内核
 
-- `tool_configure.json` declares the available tools and `visitor`, `member`,
-  `team`, and `cli` visibility.
-- `core/app/tools/` is scanned at startup and tools register themselves.
-- `POST /api/guide-agent/chat/stream` is the primary streaming entry point.
-- `core/main-agent.py` provides a CLI for local inspection and questions.
-- Tool loops are bounded, have per-tool timeouts, and open a circuit after
-  repeated failures.
-- SQLite stores page cache, section cache, answer cache, sessions, conversations,
-  and tool audit records in the agent's private volume.
+- `tool_configure.json` 声明可用工具，以及 `visitor`、`member`、`team` 和 `cli` 的可见范围。
+- 启动时扫描 `core/app/tools/`，由工具自行注册。
+- `POST /api/guide-agent/chat/stream` 是主要流式入口。
+- `core/main-agent.py` 提供本地检查和提问 CLI。
+- 工具循环设有上限和单项超时，连续失败后自动熔断。
+- SQLite 在私有卷中保存页面缓存、章节缓存、答案缓存、会话、对话和工具审计记录。
 
-## Knowledge Ingestion
+## 知识库导入
 
-Documents can be added through the RAG API or the generic structured-document
-importer:
+可通过 RAG API 或通用结构化文档导入器添加文档：
 
 ```bash
 python scripts/import_documents.py \
@@ -74,30 +59,27 @@ python scripts/import_documents.py \
   --wait
 ```
 
-The importer expects a directory containing:
+导入器要求目录包含：
 
 ```text
 knowledge_base/knowledge_base.json
 text_raw/pages_text/page_001.txt
 ```
 
-It does not contain any book names, local paths, or topic-specific scoring.
+仓库不包含固定书名、本地路径或专题评分。
 
-## Website Integration
+## 网站集成
 
-Website synchronization is disabled by default. To enable it:
+网站同步默认关闭。如需启用：
 
-1. Configure `WEBSITE_EXPORT_BASE_URL` and `WEBSITE_EXPORT_TOKEN`.
-2. Set `WEBSITE_SYNC_ENABLED=true`.
-3. Optionally configure `WEBSITE_READONLY_DATABASE_URL` for direct read-only
-   content queries.
-4. Optionally configure `WEBSITE_WRITE_BASE_URL` and
-   `WEBSITE_WRITE_ADMIN_TOKEN` for short-lived draft or publish sessions.
+1. 配置 `WEBSITE_EXPORT_BASE_URL` 和 `WEBSITE_EXPORT_TOKEN`。
+2. 设置 `WEBSITE_SYNC_ENABLED=true`。
+3. 可选：配置 `WEBSITE_READONLY_DATABASE_URL`，直接执行只读内容查询。
+4. 可选：配置 `WEBSITE_WRITE_BASE_URL` 和 `WEBSITE_WRITE_ADMIN_TOKEN`，启用限时草稿或发布会话。
 
-The website remains optional. With synchronization disabled, the agent still
-serves chat, page-context, cache, and retrieval features from its own database.
+网站为可选依赖。关闭同步后，讲解助手仍可使用自身数据库提供对话、页面上下文、缓存和检索功能。
 
-## Tests
+## 测试
 
 ```bash
 docker compose run --rm --no-deps core pytest
@@ -105,6 +87,6 @@ docker compose run --rm --no-deps rag pytest
 docker compose config
 ```
 
-## License
+## 许可证
 
-MIT. See [LICENSE](LICENSE).
+MIT，详见 [LICENSE](LICENSE)。
